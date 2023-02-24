@@ -165,10 +165,16 @@ def remove_thread(args):
 	thread_list = retrieve_storythreads(args.story)
 	if args.name not in thread_list:
 		raise parser.error("The story thread with the given name does not exist and cannot be removed")
+	if args.ending and thread_list.count(args.name) <= 1:
+		raise parser.error("The story thread is already open")
 
-	# create and store new threads
-	while(args.name in thread_list):
-		thread_list.remove(args.name)
+	if args.ending:
+		# remove only closing (i.e. open again)
+		thread_list.pop(len(thread_list) - 1 - list(reversed(thread_list)).index(args.name))
+	else:
+		# remove whole thread
+		while(args.name in thread_list):
+			thread_list.remove(args.name)
 	store_storythreads(args.story, thread_list)
 
 	# show changes
@@ -210,6 +216,7 @@ parser_end.add_argument("closed", type=int, help="the index on which to close th
 parser_end.set_defaults(func=close_thread)
 parser_rm = subparsers.add_parser("remove", aliases=["rm"], help="remove a story thread")
 parser_rm.add_argument("name", type=str, help="the name of the thread to be removed")
+parser_rm.add_argument("-e", "--ending", action="store_true", help="remove only the closing of the thread (i.e. open it again)")
 parser_rm.set_defaults(func=remove_thread)
 parser_list = subparsers.add_parser("show", help="show all story threads")
 parser_list.set_defaults(func=show_threads)
