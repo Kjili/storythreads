@@ -6,9 +6,9 @@ from enum import Enum
 
 ### helper functions ###
 
-def retrieve_storythreads(story):
+def retrieve_storythreads(story, path):
 	# the threadlist is a list of dictionaries, stored as a json file
-	storythread_file = Path(story)
+	storythread_file = Path(path, story + ".json")
 	thread_list = []
 	try:
 		with open(storythread_file, "r") as f:
@@ -18,8 +18,9 @@ def retrieve_storythreads(story):
 		pass
 	return thread_list
 
-def store_storythreads(story, thread_list):
-	storythread_file = Path(story)
+def store_storythreads(story, path, thread_list):
+	storythread_file = Path(path, story + ".json")
+	storythread_file.parent.mkdir(parents=True, exist_ok=True)
 	#json.dumps(vars(new_StoryThread))
 	with open(storythread_file, "w") as f:
 		json.dump({i: el for i, el in enumerate(thread_list)}, f, ensure_ascii=False)
@@ -40,7 +41,7 @@ class STATE(str, Enum):
 #─┤
 
 def show_threads(args):
-	thread_list = retrieve_storythreads(args.story)
+	thread_list = retrieve_storythreads(args.story, args.path)
 	if thread_list == []:
 		print("There is no story thread to show yet.")
 		return
@@ -146,7 +147,7 @@ def add_thread(args):
 		raise parser.error("To open a story thread, you must provide a valid index")
 	if args.closed <= args.opened and args.closed >= 0:
 		raise parser.error("The story thread must close after it opens, not before")
-	thread_list = retrieve_storythreads(args.story)
+	thread_list = retrieve_storythreads(args.story, args.path)
 	if args.name in thread_list:
 		raise parser.error("This story thread already exists and cannot be opened again")
 
@@ -156,13 +157,13 @@ def add_thread(args):
 		# because a thread has been added, in order to remove it at the
 		# prior index, need to add + 1 to the closing index
 		thread_list.insert(args.closed + 1, args.name)
-	store_storythreads(args.story, thread_list)
+	store_storythreads(args.story, args.path, thread_list)
 
 	# show changes
 	show_threads(args)
 
 def remove_thread(args):
-	thread_list = retrieve_storythreads(args.story)
+	thread_list = retrieve_storythreads(args.story, args.path)
 	if args.name not in thread_list:
 		raise parser.error("The story thread with the given name does not exist and cannot be removed")
 	if args.ending and thread_list.count(args.name) <= 1:
@@ -175,7 +176,7 @@ def remove_thread(args):
 		# remove whole thread
 		while(args.name in thread_list):
 			thread_list.remove(args.name)
-	store_storythreads(args.story, thread_list)
+	store_storythreads(args.story, args.path, thread_list)
 
 	# show changes
 	show_threads(args)
@@ -183,7 +184,7 @@ def remove_thread(args):
 def close_thread(args):
 	if args.closed <= 0:
 		raise parser.error("To close a story thread, you must provide a valid index")
-	thread_list = retrieve_storythreads(args.story)
+	thread_list = retrieve_storythreads(args.story, args.path)
 	if args.name not in thread_list:
 		raise parser.error("The story thread with the given name does not exist and cannot be closed")
 	if thread_list.count(args.name) > 1:
@@ -193,7 +194,7 @@ def close_thread(args):
 
 	# create and store new threads
 	thread_list.insert(args.closed, args.name)
-	store_storythreads(args.story, thread_list)
+	store_storythreads(args.story, args.path, thread_list)
 
 	# show changes
 	show_threads(args)
@@ -201,7 +202,7 @@ def close_thread(args):
 def change_thread(args):
 	if not args.opening and not args.ending:
 		parser.error("Neither opening nor ending of thread specified for change")
-	thread_list = retrieve_storythreads(args.story)
+	thread_list = retrieve_storythreads(args.story, args.path)
 	if args.name not in thread_list:
 		raise parser.error("The story thread with the given name does not exist and cannot be changed")
 	if thread_list.count(args.name) <= 1 and args.ending:
@@ -219,7 +220,7 @@ def change_thread(args):
 	if args.ending:
 		thread_list.pop(index_last_occurence)
 		thread_list.insert(args.ending, args.name)
-	store_storythreads(args.story, thread_list)
+	store_storythreads(args.story, args.path, thread_list)
 
 	# show changes
 	show_threads(args)
@@ -229,6 +230,7 @@ def change_thread(args):
 
 parser = argparse.ArgumentParser(prog = "story-threads", description = "Show all story threads in order")
 parser.add_argument("story", type=str, help="the story name (acts as file name to store the data threads)")
+parser.add_argument("-p", "--path", type=str, default="", help="the path to the story file")
 parser.add_argument("-c", "--show_connections", action="store_true", help="show all connections to the main story thread")
 subparsers = parser.add_subparsers(help="the program mode")
 parser_add = subparsers.add_parser("add", help="add a new story thread")
