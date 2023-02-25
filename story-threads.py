@@ -7,6 +7,23 @@ from enum import Enum
 ### helper functions ###
 
 def retrieve_storythreads(story, path):
+	"""
+	Load the story threads from the json file if it exists.
+
+	The story threads are dictionaries (to be able to identify them by
+	name) stored in a list (to order them by index). To load them from
+	a json file, the outer dictionary with the list indices as keys is
+	converted back to the list of dictionaries.
+
+	Args:
+		story: The name of the story that corresponds to the json file
+			name.
+		path: The path to the json file.
+
+	Return:
+		thread_list: The list of dictionaries that represent story
+			threads.
+	"""
 	# the threadlist is a list of dictionaries, stored as a json file
 	storythread_file = Path(path, story + ".json")
 	thread_list = []
@@ -19,6 +36,21 @@ def retrieve_storythreads(story, path):
 	return thread_list
 
 def store_storythreads(story, path, thread_list):
+	"""
+	Store the story threads as a json file.
+
+	The story threads are dictionaries (to be able to identify them by
+	name) stored in a list (to order them by index). To store them as
+	a json file, the list is converted to a dictionary with the indices
+	as keys.
+
+	Args:
+		story: The name of the story that corresponds to the json file
+			name.
+		path: The path to the json file.
+		thread_list: The list of dictionaries that represent story
+			threads.
+	"""
 	storythread_file = Path(path, story + ".json")
 	storythread_file.parent.mkdir(parents=True, exist_ok=True)
 	#json.dumps(vars(new_StoryThread))
@@ -29,6 +61,9 @@ def store_storythreads(story, path, thread_list):
 ### display threads ###
 
 class STATE(str, Enum):
+	"""
+	Define the elements of the story thread representation.
+	"""
 	OPEN = "│  "
 	OPENING = "├─ "
 	CLOSING = "┘  "
@@ -41,6 +76,14 @@ class STATE(str, Enum):
 #─┤
 
 def show_threads(args):
+	"""
+	Show a story's threads.
+
+	Prints the story threads stored in the json file.
+
+	Args:
+		args: The arguments passed to the program by the user.
+	"""
 	thread_list = retrieve_storythreads(args.story, args.path)
 	if thread_list == []:
 		print("There is no story thread to show yet.")
@@ -143,6 +186,23 @@ def show_threads(args):
 ### manipulate threads (add, remove and change) ###
 
 def add_thread(args):
+	"""
+	Add a story thread or parts of a story thread.
+
+	If the name of the story thread does not exist yet: Add the story
+	thread to the json at the given index. If only the opening or the
+	opening and a development is given (TODO), the story thread is left open.
+	If the name of the story thread exists and only one value is given:
+	Close the respective story thread and store it in the json. (TODO)
+	If the name of the story thread exists and a development is given:
+	Add the development to the story thread. (TODO)
+
+	Args:
+		args: The arguments passed to the program by the user.
+
+	Raises:
+		parser.error: If the ... (TODO)
+	"""
 	if args.opened < 0:
 		raise parser.error("To open a story thread, you must provide a valid index")
 	if args.closed <= args.opened and args.closed >= 0:
@@ -163,6 +223,20 @@ def add_thread(args):
 	show_threads(args)
 
 def remove_thread(args):
+	"""
+	Remove a story thread or parts of a story thread.
+
+	If only the name of the story thread is given: Remove the whole
+	story thread from the json. If the ending or the development (TODO) is
+	given but not the opening, remove the respective parts from the
+	story thread.
+
+	Args:
+		args: The arguments passed to the program by the user.
+
+	Raises:
+		parser.error: If the ... (TODO)
+	"""
 	thread_list = retrieve_storythreads(args.story, args.path)
 	if args.name not in thread_list:
 		raise parser.error("The story thread with the given name does not exist and cannot be removed")
@@ -182,6 +256,7 @@ def remove_thread(args):
 	show_threads(args)
 
 def close_thread(args):
+	# TODO remove this as it will be replaced by the new closing functionality of add_thread
 	if args.closed <= 0:
 		raise parser.error("To close a story thread, you must provide a valid index")
 	thread_list = retrieve_storythreads(args.story, args.path)
@@ -200,6 +275,19 @@ def close_thread(args):
 	show_threads(args)
 
 def change_thread(args):
+	"""
+	Change a story thread's opening, development (TODO) and/or closing indices.
+
+	Move the indices of the story thread events by removing and adding
+	them to the indices provided by the user and storing the changes in
+	the json.
+
+	Args:
+		args: The arguments passed to the program by the user.
+
+	Raises:
+		parser.error: If the ... (TODO)
+	"""
 	if not args.opening and not args.ending:
 		parser.error("Neither opening nor ending of thread specified for change")
 	thread_list = retrieve_storythreads(args.story, args.path)
