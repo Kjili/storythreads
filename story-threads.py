@@ -114,7 +114,7 @@ def show_threads(args):
 			open_list[open_list.index(current_thread)] = None
 
 	# indicate open threads
-	line = f"{spacing_offset}  {STATE.NOTCLOSED}"
+	line = f"{(spacing) * ' '} {STATE.NOTCLOSED}"
 	for thread in open_list:
 		if thread is not None:
 			line = line + STATE.NOTCLOSED
