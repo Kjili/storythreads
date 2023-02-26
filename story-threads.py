@@ -6,6 +6,14 @@ from enum import Enum
 
 ### helper functions ###
 
+class EVENT(str, Enum):
+	"""
+	Define the events of the story thread.
+	"""
+	OPENING = "open"
+	CLOSING = "close"
+	DEVELOPMENT = "develop"
+
 def retrieve_storythreads(story, path):
 	"""
 	Load the story threads from the json file if it exists.
@@ -57,6 +65,49 @@ def store_storythreads(story, path, thread_list):
 	with open(storythread_file, "w") as f:
 		json.dump({i: el for i, el in enumerate(thread_list)}, f, ensure_ascii=False)
 
+def thread_is_closed(thread_list, thread_id):
+	"""
+	Find out if a given thread has been closed.
+
+	Args:
+		thread_list: The list of dictionaries that represent story
+			threads.
+		thread_id: The id/name of the thread to check.
+
+	Return:
+		Boolean: True, if the thread has been closed, else False
+	"""
+	thread_ids = [next(iter(el.keys())) for el in thread_list]
+	index_last_entry = len(thread_ids) - 1 - list(reversed(thread_ids)).index(thread_id)
+	if thread_list[index_last_entry][thread_id]["event"] == EVENT.CLOSING:
+		return True
+	return False
+
+def thread_events_are_new(thread_list, thread_id, descriptions):
+	"""
+	Check if the event descriptions are different from those of a given
+	thread.
+
+	Args:
+		thread_list: The list of dictionaries that represent story
+			threads.
+		thread_id: The id/name of the thread to check.
+		descriptions: The list of descriptions to check against the
+			given thread's descriptions.
+
+	Return:
+		Boolean: True, if the descriptions differ, else False
+	"""
+	# gather all elements of the thread
+	thread_descriptions = set()
+	for el in thread_list:
+		name = next(iter(el.keys()))
+		if name == thread_id:
+			thread_descriptions.add(el[name]["description"])
+
+	# check if the given description(s) already exist(s)
+	return thread_descriptions.isdisjoint(descriptions)
+
 
 ### display threads ###
 
@@ -93,29 +144,40 @@ def show_threads(args):
 	print(f"{(spacing) * ' '} │")
 	open_list = []
 	for t, current_thread in enumerate(thread_list):
+		current_thread_name = next(iter(current_thread.keys()))
 		spacing_offset = (spacing - len(str(t))) * ' '
-		current_is_opening = False
 		# add an opening thread to the list of open threads
-		if not current_thread in open_list:
-			open_list.append(current_thread)
-			current_is_opening = True
+		if not current_thread_name in open_list:
+			open_list.append(current_thread_name)
 		# traverse the list in reverse to handle right neighbor states
 		neighbor_is_opening = False
 		neighbor_is_closing = False
 		line = ""
 		for i, thread in enumerate(reversed(open_list)):
-			# if the thread is the currently opened or closed thread
-			if thread == current_thread:
-				if current_is_opening:
-					line = current_thread + line
+			# if the thread is the currently opened, developed or closed
+			# thread
+			if thread == current_thread_name:
+				if current_thread[current_thread_name]["event"] == EVENT.OPENING:
+					line = current_thread[current_thread_name]["description"] + line
 					neighbor_is_opening = True
 				else:
-					line = STATE.CLOSING + line
-					neighbor_is_closing = True
+					if current_thread[current_thread_name]["event"] == EVENT.DEVELOPMENT:
+						current_state = STATE.OPEN
+					else:
+						current_state = STATE.CLOSING
+						neighbor_is_closing = True
+					desc_len = len(current_thread[current_thread_name]["description"]) + 1
+					#print(desc_len, line, len(line), line[desc_len:])
+					if desc_len <= len(current_state):
+						line = current_state + line
+					elif desc_len >= len(line):
+						line = f"{current_state[0]}{current_thread[current_thread_name]['description']}"
+					else:
+						line = f"{current_state[0]}{current_thread[current_thread_name]['description']}{line[desc_len:]}"
 			# if the thread has been closed
 			elif thread is None:
 				if neighbor_is_closing or neighbor_is_opening:
-					if neighbor_is_opening and list(reversed(open_list))[i-1] == current_thread:
+					if neighbor_is_opening and list(reversed(open_list))[i-1] == current_thread_name:
 						line = STATE.OPENINGNEIGHBOR + line
 					else:
 						line = STATE.CLOSINGNEIGHBOR + line
@@ -153,8 +215,8 @@ def show_threads(args):
 		print(line)
 
 		# remove a closing thread from the list of open threads
-		if not current_is_opening:
-			open_list[open_list.index(current_thread)] = None
+		if current_thread[current_thread_name]["event"] == EVENT.CLOSING:
+			open_list[open_list.index(current_thread_name)] = None
 
 	# indicate open threads
 	line = f"{(spacing) * ' '} {STATE.NOTCLOSED}"
@@ -165,7 +227,7 @@ def show_threads(args):
 			line = line + STATE.CLOSED
 	print(line)
 
-	print(f"Number of threads: {len(set(thread_list))} + 1 (main thread)")
+	print(f"Number of threads: {len(set([next(iter(key)) for key in thread_list]))} + 1 (main thread)")
 	print(f"Number of open threads: {len(open_list) - open_list.count(None)} + 1 (main thread)")
 
 # more sophisticated sample (with new threads claiming empty columns):
@@ -190,12 +252,16 @@ def add_thread(args):
 	Add a story thread or parts of a story thread.
 
 	If the name of the story thread does not exist yet: Add the story
-	thread to the json at the given index. If only the opening or the
-	opening and a development is given (TODO), the story thread is left open.
-	If the name of the story thread exists and only one value is given:
-	Close the respective story thread and store it in the json. (TODO)
-	If the name of the story thread exists and a development is given:
-	Add the development to the story thread. (TODO)
+	thread to the json at the given index.
+	If only the opening or the opening and a development (or
+	developments) are given, the story thread is left open. If a closing
+	flag is given, the last event closes the thread.
+	If the name of the story thread exists and the closing flag is not
+	set: Develop the respective story thread and store it in the json.
+	If the name of the story thread exists and the close flag is set:
+	Develop the respective story thread if more than one event is given
+	and close the story thread with the last event. Then, store it in
+	the json.
 
 	Args:
 		args: The arguments passed to the program by the user.
@@ -203,26 +269,53 @@ def add_thread(args):
 	Raises:
 		parser.error: If the ... (TODO)
 	"""
-	if args.opened < 0:
-		raise parser.error("To open a story thread, you must provide a valid index")
-	if args.closed <= args.opened and args.closed >= 0:
-		raise parser.error("The story thread must close after it opens, not before")
-	thread_list = retrieve_storythreads(args.story, args.path)
-	if args.name in thread_list:
-		raise parser.error("This story thread already exists and cannot be opened again")
+	if not all(args.indices[0] <= args.indices[i+1] for i in range(len(args.indices) - 1)):
+		raise parser.error("The story thread must open before it can develop or close")
+	if args.close and not all(args.indices[-1] >= args.indices[i+1] for i in range(len(args.indices) - 1)):
+		raise parser.error("The story thread must close after it opens or develops")
 
-	# create and store new threads
-	thread_list.insert(args.opened, args.name)
-	if args.closed >= 0:
-		# because a thread has been added, in order to remove it at the
-		# prior index, need to add + 1 to the closing index
-		thread_list.insert(args.closed + 1, args.name)
+	# load the threads
+	thread_list = retrieve_storythreads(args.story, args.path)
+	events = args.names
+	thread_id = args.names[0]
+	thread_is_new = thread_id not in [next(iter(el.keys())) for el in thread_list]
+
+	if (thread_is_new and (args.close and len(args.indices) > len(args.names) + 1 or len(args.indices) > len(args.names))
+	or not thread_is_new and (args.close and len(args.indices) > len(args.names) - 1 + 1 or len(args.indices) > len(args.names) - 1)):
+		raise parser.error("Missing description. Every event except of the closing of a story thread needs a description")
+	if not thread_events_are_new(thread_list, thread_id, events[1:]):
+		raise parser.error("The story thread already contains events with these descriptions")
+
+	# create a new thread
+	# TODO switch to a UID instead of the name as identifier?
+	shift_indices = 0
+	for index in args.indices:
+		description = ""
+		# closings can be without description
+		try:
+			description = events.pop(0)
+		except IndexError:
+			pass
+		current_event = EVENT.DEVELOPMENT
+		# if the thread is new, add an opening
+		if thread_id not in [next(iter(el.keys())) for el in thread_list]:
+			current_event = EVENT.OPENING
+		# if the thread is to be closed, close it
+		elif index == args.indices[-1] and args.close and not thread_is_closed(thread_list, thread_id):
+			current_event = EVENT.CLOSING
+		# add the thread event
+		thread_list.insert(index+shift_indices, {thread_id: {"event": current_event, "description": description}})
+		# because a thread has been added, in order to keep the
+		# indices correct, increment the index
+		shift_indices += 1
+
+	# store changes
 	store_storythreads(args.story, args.path, thread_list)
 
 	# show changes
 	show_threads(args)
 
-def remove_thread(args):
+def remove_thread(args, noshow=False):
 	"""
 	Remove a story thread or parts of a story thread.
 
@@ -233,46 +326,33 @@ def remove_thread(args):
 
 	Args:
 		args: The arguments passed to the program by the user.
+		noshow (Boolean): A flag to show or not show the threads. The
+			default is to show them (False).
 
 	Raises:
 		parser.error: If the ... (TODO)
 	"""
 	thread_list = retrieve_storythreads(args.story, args.path)
-	if args.name not in thread_list:
+	thread_ids = [next(iter(el.keys())) for el in thread_list]
+
+	if args.name not in thread_ids:
 		raise parser.error("The story thread with the given name does not exist and cannot be removed")
-	if args.ending and thread_list.count(args.name) <= 1:
+	if args.ending and not thread_is_closed(thread_list, args.name):
 		raise parser.error("The story thread is already open")
 
 	if args.ending:
 		# remove only closing (i.e. open again)
-		thread_list.pop(len(thread_list) - 1 - list(reversed(thread_list)).index(args.name))
+		thread_list.pop(len(thread_ids) - 1 - list(reversed(thread_ids)).index(args.name))
 	else:
 		# remove whole thread
-		while(args.name in thread_list):
-			thread_list.remove(args.name)
+		while(args.name in thread_ids):
+			thread_list.pop(thread_ids.index(args.name))
+			thread_ids.remove(args.name)
 	store_storythreads(args.story, args.path, thread_list)
 
 	# show changes
-	show_threads(args)
-
-def close_thread(args):
-	# TODO remove this as it will be replaced by the new closing functionality of add_thread
-	if args.closed <= 0:
-		raise parser.error("To close a story thread, you must provide a valid index")
-	thread_list = retrieve_storythreads(args.story, args.path)
-	if args.name not in thread_list:
-		raise parser.error("The story thread with the given name does not exist and cannot be closed")
-	if thread_list.count(args.name) > 1:
-		raise parser.error("The story thread with the given name has already been closed")
-	if args.closed <= thread_list.index(args.name):
-		raise parser.error("The story thread must close after it opens, not before")
-
-	# create and store new threads
-	thread_list.insert(args.closed, args.name)
-	store_storythreads(args.story, args.path, thread_list)
-
-	# show changes
-	show_threads(args)
+	if not noshow:
+		show_threads(args)
 
 def change_thread(args):
 	"""
@@ -290,28 +370,46 @@ def change_thread(args):
 	"""
 	if not args.opening and not args.ending:
 		parser.error("Neither opening nor ending of thread specified for change")
+
 	thread_list = retrieve_storythreads(args.story, args.path)
-	if args.name not in thread_list:
+	thread_ids = [next(iter(el.keys())) for el in thread_list]
+
+	if args.name not in thread_ids:
 		raise parser.error("The story thread with the given name does not exist and cannot be changed")
-	if thread_list.count(args.name) <= 1 and args.ending:
-		raise parser.error("The story thread with the given name has not been closed yet")
-	index_last_occurence = len(thread_list) - 1 - list(reversed(thread_list)).index(args.name)
-	if (args.opening and args.ending and args.opening > args.ending or
-		args.opening and args.opening > index_last_occurence or
-		args.ending and thread_list.index(args.name) >= args.ending):
-		raise parser.error("The story thread must open before it is closed")
 
-	# remove old threads, create and store new threads
+	# get the current thread
+	current_indices = []
+	current_descriptions = []
+	current_close = False
+	for i,el in enumerate(thread_list):
+		name = next(iter(el.keys()))
+		if name == args.name:
+			current_indices.append(i)
+			try:
+				current_descriptions.append(el[name]["description"])
+			except IndexError:
+				pass
+			if el[name]["event"] == EVENT.CLOSING:
+				current_close = True
+
+	# apply changes
 	if args.opening:
-		thread_list.remove(args.name)
-		thread_list.insert(args.opening, args.name)
+		current_indices[0] = args.opening
 	if args.ending:
-		thread_list.pop(index_last_occurence)
-		thread_list.insert(args.ending, args.name)
-	store_storythreads(args.story, args.path, thread_list)
+		current_indices[-1] = args.ending
+		#current_descriptions.insert(0, args.name)
+	params = argparse.Namespace(
+		story = args.story,
+		path = args.path,
+		show_connections = args.show_connections,
+		names = current_descriptions,
+		indices = current_indices,
+		close = current_close
+	)
 
-	# show changes
-	show_threads(args)
+	# remove old thread, create and store changed thread
+	remove_thread(argparse.Namespace(story=args.story, path=args.path, show_connections=args.show_connections, name=args.name, ending=False), noshow=True)
+	add_thread(params)
 
 
 ### parse input and call functions ###
@@ -321,15 +419,11 @@ parser.add_argument("story", type=str, help="the story name (acts as file name t
 parser.add_argument("-p", "--path", type=str, default="", help="the path to the story file")
 parser.add_argument("-c", "--show_connections", action="store_true", help="show all connections to the main story thread")
 subparsers = parser.add_subparsers(help="the program mode")
-parser_add = subparsers.add_parser("add", help="add a new story thread")
-parser_add.add_argument("name", type=str, help="the thread name")
-parser_add.add_argument("opened", type=int, help="the index on which to open the thread")
-parser_add.add_argument("-c", "--closed", type=int, default=-1, help="the index on which the thread is closed (corresponds to the index before adding the new thread)")
+parser_add = subparsers.add_parser("add", help="add a new story thread or add a new part to an existing story thread")
+parser_add.add_argument("names", type=str, nargs="+", help="the thread name (corresponds to the text of the first event) and the texts for the remaining events, if any")
+parser_add.add_argument("-i", "--indices", type=int, nargs="+", required=True, help="the indices of the events on which to open, develop and/or close the thread")
+parser_add.add_argument("-c", "--close", action="store_true", help="close the story thread with the last given index (if not set, every event after the opening is considered a development)")
 parser_add.set_defaults(func=add_thread)
-parser_end = subparsers.add_parser("end", help="close a story thread")
-parser_end.add_argument("name", type=str, help="the thread name")
-parser_end.add_argument("closed", type=int, help="the index on which to close the thread")
-parser_end.set_defaults(func=close_thread)
 parser_rm = subparsers.add_parser("remove", aliases=["rm"], help="remove a story thread")
 parser_rm.add_argument("name", type=str, help="the name of the thread to be removed")
 parser_rm.add_argument("-e", "--ending", action="store_true", help="remove only the closing of the thread (i.e. open it again)")
