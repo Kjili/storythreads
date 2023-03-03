@@ -267,24 +267,24 @@ def add_thread(args):
 		args: The arguments passed to the program by the user.
 
 	Raises:
-		parser.error: If the ... (TODO)
+		ValueError: If the ... (TODO)
 	"""
 	if not all(args.indices[0] <= args.indices[i+1] for i in range(len(args.indices) - 1)):
-		raise parser.error("The story thread must open before it can develop or close")
+		raise ValueError("The story thread must open before it can develop or close")
 	if args.close and not all(args.indices[-1] >= args.indices[i+1] for i in range(len(args.indices) - 1)):
-		raise parser.error("The story thread must close after it opens or develops")
+		raise ValueError("The story thread must close after it opens or develops")
 
 	# load the threads
 	thread_list = retrieve_storythreads(args.story, args.path)
-	events = args.names
+	events = args.names.copy()
 	thread_id = args.names[0]
 	thread_is_new = thread_id not in [next(iter(el.keys())) for el in thread_list]
 
-	if (thread_is_new and (args.close and len(args.indices) > len(args.names) + 1 or len(args.indices) > len(args.names))
-	or not thread_is_new and (args.close and len(args.indices) > len(args.names) - 1 + 1 or len(args.indices) > len(args.names) - 1)):
-		raise parser.error("Missing description. Every event except of the closing of a story thread needs a description")
 	if not thread_events_are_new(thread_list, thread_id, events[1:]):
-		raise parser.error("The story thread already contains events with these descriptions")
+		raise ValueError("The story thread already contains events with these descriptions")
+	if (thread_is_new and (args.close and len(args.indices) > len(args.names) + 1 or len(args.indices) > len(args.names))
+	or not thread_is_new and (args.close and len(args.indices) > len(args.names) or len(args.indices) > len(args.names) - 1)):
+		raise ValueError("Missing description. Every event except of the closing of a story thread needs a description")
 
 	# create a new thread
 	# TODO switch to a UID instead of the name as identifier?
@@ -330,15 +330,15 @@ def remove_thread(args, noshow=False):
 			default is to show them (False).
 
 	Raises:
-		parser.error: If the ... (TODO)
+		ValueError: If the ... (TODO)
 	"""
 	thread_list = retrieve_storythreads(args.story, args.path)
 	thread_ids = [next(iter(el.keys())) for el in thread_list]
 
 	if args.name not in thread_ids:
-		raise parser.error("The story thread with the given name does not exist and cannot be removed")
+		raise ValueError("The story thread with the given name does not exist and cannot be removed")
 	if args.ending and not thread_is_closed(thread_list, args.name):
-		raise parser.error("The story thread is already open")
+		raise ValueError("The story thread is already open")
 
 	if args.ending:
 		# remove only closing (i.e. open again)
@@ -366,16 +366,18 @@ def change_thread(args):
 		args: The arguments passed to the program by the user.
 
 	Raises:
-		parser.error: If the ... (TODO)
+		ValueError: If the ... (TODO)
 	"""
 	if not args.opening and not args.ending:
-		parser.error("Neither opening nor ending of thread specified for change")
+		ValueError("Neither opening nor ending of thread specified for change")
+	if len(args.opening) > 2 or len(args.ending) > 2:
+		ValueError("You can only set one index and description per event")
 
 	thread_list = retrieve_storythreads(args.story, args.path)
 	thread_ids = [next(iter(el.keys())) for el in thread_list]
 
 	if args.name not in thread_ids:
-		raise parser.error("The story thread with the given name does not exist and cannot be changed")
+		raise ValueError("The story thread with the given name does not exist and cannot be changed")
 
 	# get the current thread
 	current_indices = []
@@ -394,9 +396,17 @@ def change_thread(args):
 
 	# apply changes
 	if args.opening:
-		current_indices[0] = args.opening
+		for el in args.opening:
+			try:
+				current_indices[0] = int(args.opening)
+			except ValueError:
+				current_descriptions[0] = args.opening
 	if args.ending:
-		current_indices[-1] = args.ending
+		for el in args.ending:
+			try:
+				current_indices[-1] = int(args.ending)
+			except ValueError:
+				current_descriptions[-1] = args.ending
 		#current_descriptions.insert(0, args.name)
 	params = argparse.Namespace(
 		story = args.story,
@@ -412,28 +422,4 @@ def change_thread(args):
 	add_thread(params)
 
 
-### parse input and call functions ###
 
-parser = argparse.ArgumentParser(prog = "story-threads", description = "Show all story threads in order")
-parser.add_argument("story", type=str, help="the story name (acts as file name to store the data threads)")
-parser.add_argument("-p", "--path", type=str, default="", help="the path to the story file")
-parser.add_argument("-c", "--show_connections", action="store_true", help="show all connections to the main story thread")
-subparsers = parser.add_subparsers(help="the program mode")
-parser_add = subparsers.add_parser("add", help="add a new story thread or add a new part to an existing story thread")
-parser_add.add_argument("names", type=str, nargs="+", help="the thread name (corresponds to the text of the first event) and the texts for the remaining events, if any")
-parser_add.add_argument("-i", "--indices", type=int, nargs="+", required=True, help="the indices of the events on which to open, develop and/or close the thread")
-parser_add.add_argument("-c", "--close", action="store_true", help="close the story thread with the last given index (if not set, every event after the opening is considered a development)")
-parser_add.set_defaults(func=add_thread)
-parser_rm = subparsers.add_parser("remove", aliases=["rm"], help="remove a story thread")
-parser_rm.add_argument("name", type=str, help="the name of the thread to be removed")
-parser_rm.add_argument("-e", "--ending", action="store_true", help="remove only the closing of the thread (i.e. open it again)")
-parser_rm.set_defaults(func=remove_thread)
-parser_change = subparsers.add_parser("change", help="change the position of a story thread's opening and/or closing")
-parser_change.add_argument("name", type=str, help="the name of the thread to be removed")
-parser_change.add_argument("-o", "--opening", type=int, help="change the opening index of the thread")
-parser_change.add_argument("-e", "--ending", type=int, help="change the closing index of the thread")
-parser_change.set_defaults(func=change_thread)
-parser_list = subparsers.add_parser("show", help="show all story threads")
-parser_list.set_defaults(func=show_threads)
-args = parser.parse_args()
-args.func(args)
