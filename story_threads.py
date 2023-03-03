@@ -295,8 +295,10 @@ def add_thread(args):
 	events = args.names.copy()
 	thread_id = args.names[0]
 	thread_is_new = thread_id not in [next(iter(el.keys())) for el in thread_list]
+	if not thread_is_new:
+		events.pop(0) # remove id
 
-	if not thread_events_are_new(thread_list, thread_id, events[1:]):
+	if not thread_events_are_new(thread_list, thread_id, events):
 		raise ValueError("The story thread already contains events with these descriptions")
 	if (thread_is_new and (args.close and len(args.indices) > len(args.names) + 1 or not args.close and len(args.indices) > len(args.names))
 	or not thread_is_new and (args.close and len(args.indices) > len(args.names) or not args.close and len(args.indices) > len(args.names) - 1)):
@@ -308,6 +310,7 @@ def add_thread(args):
 	# TODO switch to a UID instead of the name as identifier?
 	shift_indices = 0
 	for index in args.indices:
+		index = int(index)
 		description = ""
 		# closings can be without description
 		try:
@@ -338,7 +341,7 @@ def remove_thread(args, noshow=False):
 	Remove a story thread or parts of a story thread.
 
 	If only the name of the story thread is given: Remove the whole
-	story thread from the json. If the ending or the development (TODO) is
+	story thread from the json. If the ending or the development is
 	given but not the opening, remove the respective parts from the
 	story thread.
 

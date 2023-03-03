@@ -176,6 +176,27 @@ def test_add_closed_without_description(monkeypatch, tmp_path):
 		result = json.load(f)
 		assert result == expected
 
+def test_add_development(monkeypatch, tmp_path):
+	with open(Path(tmp_path, "runtests.json"), "w") as f:
+		json.dump(WHOLE_THREAD, f, ensure_ascii=False)
+
+	thread_d = "ally knows"
+
+	expected = WHOLE_THREAD
+	monkeypatch.setitem(expected, "3", expected["2"])
+	monkeypatch.setitem(expected, "2", {"antagonist in disguise":
+		{"event": "develop", "description": thread_d}})
+
+	ARGS.path = tmp_path
+	monkeypatch.setattr(ARGS, "names", ["antagonist in disguise", thread_d])
+	monkeypatch.setattr(ARGS, "indices", ["2"])
+	monkeypatch.setattr(ARGS, "close", False)
+
+	story_threads.add_thread(ARGS)
+	
+	with open(Path(tmp_path, "runtests.json"), "r") as f:
+		result = json.load(f)
+		assert result == expected
 
 # test closing without description
 # test adding to existing thread
