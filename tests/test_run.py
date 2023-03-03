@@ -50,40 +50,67 @@ ARGS = argparse.Namespace(
 	story = "runtests",
 	path = "",
 	show_connections = False,
-	names = [WHOLE_THREAD[i][next(iter(WHOLE_THREAD[i].keys()))]["description"] for i in WHOLE_THREAD.keys()],
-	indices = [int(i) for i in WHOLE_THREAD.keys()],
-	close = True if "close" in [WHOLE_THREAD[i][next(iter(WHOLE_THREAD[i].keys()))]["event"] for i in WHOLE_THREAD.keys()] else False
+	names = [],
+	indices = [],
+	close = None
 )
 
-def test_add_whole_thread(tmp_path):
-	expected = WHOLE_THREAD
-	ARGS.path = tmp_path
 
-	#with patch.object(sys, "argv",
-	#["story-threads.py", "runtests", "add",
-	#expected["0"][next(iter(expected["0"].keys()))]["description"], expected["1"][next(iter(expected["1"].keys()))]["description"], expected["2"][next(iter(expected["2"].keys()))]["description"],
-	#"-i", "0", "1", "2", "-c"]):
+def get_descriptions(thread):
+	"""
+	List all descriptions from the given thread
+
+	Return:
+		list: A list of all descriptions from the given thread
+	"""
+	return [thread[i][next(iter(thread[i].keys()))]["description"] for i in thread.keys()]
+
+def thread_closes(thread):
+	"""
+	Check if the given thread is closed
+
+	Return:
+		Boolean: True if the thread closes, else False
+	"""
+	return True if "close" in [thread[i][next(iter(thread[i].keys()))]["event"] for i in thread.keys()] else False
+
+
+def test_add_whole_thread(monkeypatch, tmp_path):
+	expected = WHOLE_THREAD
+
+	ARGS.path = tmp_path
+	monkeypatch.setattr(ARGS, "names", get_descriptions(WHOLE_THREAD))
+	monkeypatch.setattr(ARGS, "indices", [int(i) for i in WHOLE_THREAD.keys()])
+	monkeypatch.setattr(ARGS, "close", thread_closes(WHOLE_THREAD))
+
 	story_threads.add_thread(ARGS)
 	with open(Path(tmp_path, "runtests.json"), "r") as f:
 		result = json.load(f)
 		assert result == expected
 
-def test_add_same_thread_twice(tmp_path):
+def test_add_same_thread_twice(monkeypatch, tmp_path):
 	with pytest.raises(ValueError) as e:
 		expected = WHOLE_THREAD
+
 		ARGS.path = tmp_path
+		monkeypatch.setattr(ARGS, "names", get_descriptions(WHOLE_THREAD))
+		monkeypatch.setattr(ARGS, "indices", [int(i) for i in WHOLE_THREAD.keys()])
+		monkeypatch.setattr(ARGS, "close", thread_closes(WHOLE_THREAD))
 
 		story_threads.add_thread(ARGS)
 		story_threads.add_thread(ARGS)
 
 def test_add_open_thread(monkeypatch, tmp_path):
 	expected = OPEN_THREAD
+	# since there is no second element, the second element will be
+	# stored at position 1 in the thread list
 	monkeypatch.setitem(expected, "1", expected["2"])
 	monkeypatch.delitem(expected, "2")
+
 	ARGS.path = tmp_path
-	monkeypatch.setattr(ARGS, "names", [OPEN_THREAD[i][next(iter(OPEN_THREAD[i].keys()))]["description"] for i in OPEN_THREAD.keys()])
+	monkeypatch.setattr(ARGS, "names", get_descriptions(OPEN_THREAD))
 	monkeypatch.setattr(ARGS, "indices", [int(i) for i in OPEN_THREAD.keys()])
-	monkeypatch.setattr(ARGS, "close", True if "close" in [OPEN_THREAD[i][next(iter(OPEN_THREAD[i].keys()))]["event"] for i in OPEN_THREAD.keys()] else False)
+	monkeypatch.setattr(ARGS, "close", thread_closes(OPEN_THREAD))
 
 	story_threads.add_thread(ARGS)
 	with open(Path(tmp_path, "runtests.json"), "r") as f:
@@ -92,27 +119,36 @@ def test_add_open_thread(monkeypatch, tmp_path):
 
 def test_add_whole_thread_first(monkeypatch, tmp_path):
 	expected = WHOLE_THREAD_FIRST
-	ARGS.path = tmp_path
 
-	story_threads.add_thread(ARGS)
-	monkeypatch.setattr(ARGS, "names", [OPEN_THREAD[i][next(iter(OPEN_THREAD[i].keys()))]["description"] for i in OPEN_THREAD.keys()])
+	ARGS.path = tmp_path
+	with monkeypatch.context() as m:
+		m.setattr(ARGS, "names", get_descriptions(WHOLE_THREAD))
+		m.setattr(ARGS, "indices", [int(i) for i in WHOLE_THREAD.keys()])
+		m.setattr(ARGS, "close", thread_closes(WHOLE_THREAD))
+		story_threads.add_thread(ARGS)
+	monkeypatch.setattr(ARGS, "names", get_descriptions(OPEN_THREAD))
 	monkeypatch.setattr(ARGS, "indices", [int(i) for i in OPEN_THREAD.keys()])
-	monkeypatch.setattr(ARGS, "close", True if "close" in [OPEN_THREAD[i][next(iter(OPEN_THREAD[i].keys()))]["event"] for i in OPEN_THREAD.keys()] else False)
+	monkeypatch.setattr(ARGS, "close", thread_closes(OPEN_THREAD))
 	story_threads.add_thread(ARGS)
+
 	with open(Path(tmp_path, "runtests.json"), "r") as f:
 		result = json.load(f)
 		assert result == expected
 
 def test_add_open_thread_first(monkeypatch, tmp_path):
 	expected = OPEN_THREAD_FIRST
-	ARGS.path = tmp_path
 
+	ARGS.path = tmp_path
 	with monkeypatch.context() as m:
-		m.setattr(ARGS, "names", [OPEN_THREAD[i][next(iter(OPEN_THREAD[i].keys()))]["description"] for i in OPEN_THREAD.keys()])
+		m.setattr(ARGS, "names", get_descriptions(OPEN_THREAD))
 		m.setattr(ARGS, "indices", [int(i) for i in OPEN_THREAD.keys()])
-		m.setattr(ARGS, "close", True if "close" in [OPEN_THREAD[i][next(iter(OPEN_THREAD[i].keys()))]["event"] for i in OPEN_THREAD.keys()] else False)
+		m.setattr(ARGS, "close", thread_closes(OPEN_THREAD))
 		story_threads.add_thread(ARGS)
+	monkeypatch.setattr(ARGS, "names", get_descriptions(WHOLE_THREAD))
+	monkeypatch.setattr(ARGS, "indices", [int(i) for i in WHOLE_THREAD.keys()])
+	monkeypatch.setattr(ARGS, "close", thread_closes(WHOLE_THREAD))
 	story_threads.add_thread(ARGS)
+	
 	with open(Path(tmp_path, "runtests.json"), "r") as f:
 		result = json.load(f)
 		assert result == expected
