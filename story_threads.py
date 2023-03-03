@@ -343,6 +343,31 @@ def remove_thread(args, noshow=False):
 	if args.ending:
 		# remove only closing (i.e. open again)
 		thread_list.pop(len(thread_ids) - 1 - list(reversed(thread_ids)).index(args.name))
+	elif args.development:
+		# remove only specified developments
+		indices = []
+		descriptions = []
+		for el in args.development:
+			try:
+				indices.append(int(el))
+			except ValueError:
+				descriptions.append(el)
+		for i,t in enumerate(thread_list):
+			if t[next(iter(t.keys()))]["description"] in descriptions:
+				indices.append(i)
+		removed = 0
+		indices.sort()
+		for i in indices:
+			if thread_ids[i] == args.name:
+				if thread_list[i][next(iter(thread_list[i].keys()))]["event"] == "develop":
+					thread_list.pop(i+removed)
+					removed -= 1
+				else:
+					print(f"Did not remove thread development at index {i} as it is not a development.")
+			else:
+				print(f"Did not remove thread development at index {i} as it belongs to a different thread.")
+		if removed == 0:
+			print(f"There was nothing to remove.")
 	else:
 		# remove whole thread
 		while(args.name in thread_ids):
