@@ -282,8 +282,8 @@ def add_thread(args):
 
 	if not thread_events_are_new(thread_list, thread_id, events[1:]):
 		raise ValueError("The story thread already contains events with these descriptions")
-	if (thread_is_new and (args.close and len(args.indices) > len(args.names) + 1 or len(args.indices) > len(args.names))
-	or not thread_is_new and (args.close and len(args.indices) > len(args.names) or len(args.indices) > len(args.names) - 1)):
+	if (thread_is_new and (args.close and len(args.indices) > len(args.names) + 1 or not args.close and len(args.indices) > len(args.names))
+	or not thread_is_new and (args.close and len(args.indices) > len(args.names) or not args.close and len(args.indices) > len(args.names) - 1)):
 		raise ValueError("Missing description. Every event except of the closing of a story thread needs a description")
 
 	# create a new thread

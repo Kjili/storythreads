@@ -63,7 +63,13 @@ def get_descriptions(thread):
 	Return:
 		list: A list of all descriptions from the given thread
 	"""
-	return [thread[i][next(iter(thread[i].keys()))]["description"] for i in thread.keys()]
+	descriptions = []
+	for k in thread.keys():
+		try:
+			descriptions.append(thread[k][next(iter(thread[k].keys()))]["description"])
+		except KeyError:
+			pass
+	return descriptions
 
 def thread_closes(thread):
 	"""
@@ -152,3 +158,34 @@ def test_add_open_thread_first(monkeypatch, tmp_path):
 	with open(Path(tmp_path, "runtests.json"), "r") as f:
 		result = json.load(f)
 		assert result == expected
+
+def test_add_closed_without_description(monkeypatch, tmp_path):
+	expected = WHOLE_THREAD
+	# remove the description from the closing event
+	new_close = expected["2"]
+	new_close[next(iter(expected["2"].keys()))]["description"] = ""
+	monkeypatch.setitem(expected, "2", new_close)
+
+	ARGS.path = tmp_path
+	monkeypatch.setattr(ARGS, "names", get_descriptions(WHOLE_THREAD)[:-1])
+	monkeypatch.setattr(ARGS, "indices", [int(i) for i in WHOLE_THREAD.keys()])
+	monkeypatch.setattr(ARGS, "close", thread_closes(WHOLE_THREAD))
+
+	story_threads.add_thread(ARGS)
+	with open(Path(tmp_path, "runtests.json"), "r") as f:
+		result = json.load(f)
+		assert result == expected
+
+
+# test closing without description
+# test adding to existing thread
+# test error cases:
+#- pass empty lists
+#- pass missing development description -> ValueError
+#- pass missing development description with already open thread -> ValueError
+#- pass correct thread in different order (e.g. first close, then develop, then open)
+#- pass wrong event order (first close, then develop or open and first develop or open then close) -> ValueError
+#- develop with same text
+
+# test remove thread and change thread
+# test showthread?
