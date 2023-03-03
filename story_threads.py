@@ -245,6 +245,22 @@ def show_threads(args):
 #┊           ┊
 
 
+def undo(args):
+	"""
+	Undo the last action
+
+	This is done by loading the cached thread_list from file.
+
+	Args:
+		args: The arguments passed to the program by the user.
+	"""
+	thread_list = retrieve_storythreads(f".{args.story}", args.path)
+	store_storythreads(args.story, args.path, thread_list)
+
+	# show state
+	show_threads(args)
+
+
 ### manipulate threads (add, remove and change) ###
 
 def add_thread(args):
@@ -285,6 +301,8 @@ def add_thread(args):
 	if (thread_is_new and (args.close and len(args.indices) > len(args.names) + 1 or not args.close and len(args.indices) > len(args.names))
 	or not thread_is_new and (args.close and len(args.indices) > len(args.names) or not args.close and len(args.indices) > len(args.names) - 1)):
 		raise ValueError("Missing description. Every event except of the closing of a story thread needs a description")
+
+	store_storythreads(f".{args.story}", args.path, thread_list) # cache
 
 	# create a new thread
 	# TODO switch to a UID instead of the name as identifier?
@@ -339,6 +357,8 @@ def remove_thread(args, noshow=False):
 		raise ValueError("The story thread with the given name does not exist and cannot be removed")
 	if args.ending and not thread_is_closed(thread_list, args.name):
 		raise ValueError("The story thread is already open")
+
+	store_storythreads(f".{args.story}", args.path, thread_list) # cache
 
 	if args.ending:
 		# remove only closing (i.e. open again)
@@ -403,6 +423,8 @@ def change_thread(args):
 
 	if args.name not in thread_ids:
 		raise ValueError("The story thread with the given name does not exist and cannot be changed")
+
+	store_storythreads(f".{args.story}", args.path, thread_list) # cache
 
 	# get the current thread
 	current_indices = []

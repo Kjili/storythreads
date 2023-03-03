@@ -27,5 +27,7 @@ parser_change.add_argument("-e", "--ending", type=str, nargs="+", help="change t
 parser_change.set_defaults(func=story_threads.change_thread)
 parser_list = subparsers.add_parser("show", help="show all story threads")
 parser_list.set_defaults(func=story_threads.show_threads)
+parser_undo = subparsers.add_parser("undo", help="undo the last action")
+parser_undo.set_defaults(func=story_threads.undo)
 args = parser.parse_args()
 args.func(args)
