@@ -38,7 +38,9 @@ def retrieve_storythreads(story, path):
 	try:
 		with open(storythread_file, "r") as f:
 			thread_dict = json.load(f)
-		thread_list = list(thread_dict.values())
+		sorted_keys = [int(k) for k in thread_dict.keys()]
+		sorted_keys.sort()
+		thread_list = [thread_dict[str(k)] for k in sorted_keys]
 	except (FileNotFoundError, json.decoder.JSONDecodeError):
 		pass
 	return thread_list
@@ -69,14 +71,19 @@ def thread_is_closed(thread_list, thread_id):
 	"""
 	Find out if a given thread has been closed.
 
+	A non-existing thread is not closed.
+
 	Args:
 		thread_list: The list of dictionaries that represent story
 			threads.
 		thread_id: The id/name of the thread to check.
 
 	Return:
-		Boolean: True, if the thread has been closed, else False
+		Boolean: True, if the thread exists and has been closed, else
+			False
 	"""
+	if thread_id not in [next(iter(el.keys())) for el in thread_list]:
+		return False
 	thread_ids = [next(iter(el.keys())) for el in thread_list]
 	index_last_entry = len(thread_ids) - 1 - list(reversed(thread_ids)).index(thread_id)
 	if thread_list[index_last_entry][thread_id]["event"] == EVENT.CLOSING:
@@ -287,12 +294,16 @@ def add_thread(args, nocache=False):
 
 	Raises:
 		ValueError: If
+			- no name is given for the thread (checked by argparse)
+			- no indices are given for the thread (checked by argparse)
 			- the thread contains events with the given descriptions
 			- descriptions are missing for opening or developments
 			- the order of opening, developments, closing is wrong
 	"""
-	if not all(args.indices[0] <= args.indices[i+1] for i in range(len(args.indices) - 1)):
-		raise ValueError("The story thread must open before it can develop or close")
+	if not args.names: # TODO switch to a UID instead of the name as identifier?
+		raise ValueError("You need to pass at least one event name to act as identifier for the story thread")
+	if not args.indices:
+		raise ValueError("You need to pass indices to add something")
 	if args.close and not all(args.indices[-1] >= args.indices[i+1] for i in range(len(args.indices) - 1)):
 		raise ValueError("The story thread must close after it opens or develops")
 
@@ -304,17 +315,20 @@ def add_thread(args, nocache=False):
 	if not thread_is_new:
 		events.pop(0) # remove id
 
+	if thread_is_new and not all(args.indices[0] <= args.indices[i+1] for i in range(len(args.indices) - 1)):
+		raise ValueError("The story thread must open before it can develop or close")
 	if not thread_events_are_new(thread_list, thread_id, events):
 		raise ValueError("The story thread already contains events with these descriptions")
 	if (thread_is_new and (args.close and len(args.indices) > len(args.names) + 1 or not args.close and len(args.indices) > len(args.names))
 	or not thread_is_new and (args.close and len(args.indices) > len(args.names) or not args.close and len(args.indices) > len(args.names) - 1)):
 		raise ValueError("Missing description. Every event except of the closing of a story thread needs a description")
+	if args.close and thread_is_closed(thread_list, thread_id):
+		raise ValueError("Cannot close a closed thread")
 
 	if not nocache:
 		store_storythreads(f".{args.story}", args.path, thread_list)
 
 	# create a new thread
-	# TODO switch to a UID instead of the name as identifier?
 	shift_indices = 0
 	for i, index in enumerate(args.indices):
 		description = ""
@@ -378,7 +392,7 @@ def remove_thread(args, noshow=False, nocache=False):
 	if args.ending:
 		# remove only closing (i.e. open again)
 		thread_list.pop(len(thread_ids) - 1 - list(reversed(thread_ids)).index(args.name))
-	elif args.development:
+	if args.development:
 		# remove only specified developments
 		indices = []
 		descriptions = []
@@ -388,22 +402,23 @@ def remove_thread(args, noshow=False, nocache=False):
 			except ValueError:
 				descriptions.append(el)
 		for i,t in enumerate(thread_list):
-			if t[next(iter(t.keys()))]["description"] in descriptions:
+			key = next(iter(t.keys()))
+			if t[key]["event"] == EVENT.DEVELOPMENT and t[key]["description"] in descriptions:
 				indices.append(i)
 		removed = 0
 		indices.sort()
 		for i in indices:
 			if thread_ids[i] == args.name:
-				if thread_list[i][next(iter(thread_list[i].keys()))]["event"] == "develop":
-					thread_list.pop(i+removed)
-					removed -= 1
+				if thread_list[i-removed][next(iter(thread_list[i-removed].keys()))]["event"] == "develop":
+					thread_list.pop(i-removed)
+					removed += 1
 				else:
 					print(f"Did not remove thread development at index {i} as it is not a development.")
 			else:
 				print(f"Did not remove thread development at index {i} as it belongs to a different thread.")
 		if removed == 0:
 			print(f"There was nothing to remove.")
-	else:
+	if not args.ending and not args.development:
 		# remove whole thread
 		while(args.name in thread_ids):
 			thread_list.pop(thread_ids.index(args.name))
@@ -444,6 +459,8 @@ def change_thread(args):
 
 	if args.name not in thread_ids:
 		raise ValueError("The story thread with the given name does not exist and cannot be changed")
+	if args.ending and not thread_is_closed(thread_list, args.name):
+		raise ValueError("The story thread is not closed. The ending cannot be changed.")
 
 	store_storythreads(f".{args.story}", args.path, thread_list) # cache
 
