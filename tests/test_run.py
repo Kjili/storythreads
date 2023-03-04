@@ -198,7 +198,6 @@ def test_add_development(monkeypatch, tmp_path):
 		result = json.load(f)
 		assert result == expected
 
-# test closing without description
 # test adding to existing thread
 # test error cases:
 #- pass empty lists
@@ -210,3 +209,4 @@ def test_add_development(monkeypatch, tmp_path):
 
 # test remove thread and change thread
 # test showthread?
+# test undo

@@ -263,7 +263,7 @@ def undo(args):
 
 ### manipulate threads (add, remove and change) ###
 
-def add_thread(args):
+def add_thread(args, nocache=False):
 	"""
 	Add a story thread or parts of a story thread.
 
@@ -281,9 +281,15 @@ def add_thread(args):
 
 	Args:
 		args: The arguments passed to the program by the user.
+		nocache (Boolean): A flag to determine whether the current
+			thread will be cached before changes are applied. The
+			default is to cache the thread (False).
 
 	Raises:
-		ValueError: If the ... (TODO)
+		ValueError: If
+			- the thread contains events with the given descriptions
+			- descriptions are missing for opening or developments
+			- the order of opening, developments, closing is wrong
 	"""
 	if not all(args.indices[0] <= args.indices[i+1] for i in range(len(args.indices) - 1)):
 		raise ValueError("The story thread must open before it can develop or close")
@@ -304,13 +310,13 @@ def add_thread(args):
 	or not thread_is_new and (args.close and len(args.indices) > len(args.names) or not args.close and len(args.indices) > len(args.names) - 1)):
 		raise ValueError("Missing description. Every event except of the closing of a story thread needs a description")
 
-	store_storythreads(f".{args.story}", args.path, thread_list) # cache
+	if not nocache:
+		store_storythreads(f".{args.story}", args.path, thread_list)
 
 	# create a new thread
 	# TODO switch to a UID instead of the name as identifier?
 	shift_indices = 0
-	for index in args.indices:
-		index = int(index)
+	for i, index in enumerate(args.indices):
 		description = ""
 		# closings can be without description
 		try:
@@ -322,10 +328,10 @@ def add_thread(args):
 		if thread_id not in [next(iter(el.keys())) for el in thread_list]:
 			current_event = EVENT.OPENING
 		# if the thread is to be closed, close it
-		elif index == args.indices[-1] and args.close and not thread_is_closed(thread_list, thread_id):
+		elif i == len(args.indices)-1 and args.close and not thread_is_closed(thread_list, thread_id):
 			current_event = EVENT.CLOSING
 		# add the thread event
-		thread_list.insert(index+shift_indices, {thread_id: {"event": current_event, "description": description}})
+		thread_list.insert(int(index)+shift_indices, {thread_id: {"event": current_event, "description": description}})
 		# because a thread has been added, in order to keep the
 		# indices correct, increment the index
 		shift_indices += 1
@@ -336,7 +342,7 @@ def add_thread(args):
 	# show changes
 	show_threads(args)
 
-def remove_thread(args, noshow=False):
+def remove_thread(args, noshow=False, nocache=False):
 	"""
 	Remove a story thread or parts of a story thread.
 
@@ -349,9 +355,14 @@ def remove_thread(args, noshow=False):
 		args: The arguments passed to the program by the user.
 		noshow (Boolean): A flag to show or not show the threads. The
 			default is to show them (False).
+		nocache (Boolean): A flag to determine whether the current
+			thread will be cached before changes are applied. The
+			default is to cache the thread (False).
 
 	Raises:
-		ValueError: If the ... (TODO)
+		ValueError: If
+			- the given story thread does not exist
+			- the thread is to be opened but is already open
 	"""
 	thread_list = retrieve_storythreads(args.story, args.path)
 	thread_ids = [next(iter(el.keys())) for el in thread_list]
@@ -361,7 +372,8 @@ def remove_thread(args, noshow=False):
 	if args.ending and not thread_is_closed(thread_list, args.name):
 		raise ValueError("The story thread is already open")
 
-	store_storythreads(f".{args.story}", args.path, thread_list) # cache
+	if not nocache:
+		store_storythreads(f".{args.story}", args.path, thread_list)
 
 	if args.ending:
 		# remove only closing (i.e. open again)
@@ -404,22 +416,28 @@ def remove_thread(args, noshow=False):
 
 def change_thread(args):
 	"""
-	Change a story thread's opening, development (TODO) and/or closing indices.
+	Change a story thread's opening, development and/or closing indices.
 
 	Move the indices of the story thread events by removing and adding
 	them to the indices provided by the user and storing the changes in
 	the json.
+	Note: Currently, only one event can be changed at a time.
 
 	Args:
 		args: The arguments passed to the program by the user.
 
 	Raises:
-		ValueError: If the ... (TODO)
+		ValueError: If
+			- the given story thread does not exist
+			- no thread event to change is given
+			- more than one index or description is given per event
+			- the development to be changed does not exist
+			- the order of opening, developments, closing is wrong
 	"""
-	if not args.opening and not args.ending:
-		ValueError("Neither opening nor ending of thread specified for change")
-	if len(args.opening) > 2 or len(args.ending) > 2:
-		ValueError("You can only set one index and description per event")
+	if not args.opening and not args.ending and not args.development:
+		ValueError("No thread event specified for change")
+	if len(args.opening) > 2 or len(args.ending) > 2 or len(args.development) > 3:
+		ValueError("You can only change one index and description per event")
 
 	thread_list = retrieve_storythreads(args.story, args.path)
 	thread_ids = [next(iter(el.keys())) for el in thread_list]
@@ -430,6 +448,7 @@ def change_thread(args):
 	store_storythreads(f".{args.story}", args.path, thread_list) # cache
 
 	# get the current thread
+	dev_index = -1
 	current_indices = []
 	current_descriptions = []
 	current_close = False
@@ -441,6 +460,8 @@ def change_thread(args):
 				current_descriptions.append(el[name]["description"])
 			except IndexError:
 				pass
+			if args.development and el[name]["event"] == EVENT.DEVELOPMENT and (str(i) == args.development[0] or el[name]["description"] == args.development[0]):
+				dev_index = len(current_indices) - 1
 			if el[name]["event"] == EVENT.CLOSING:
 				current_close = True
 
@@ -448,16 +469,35 @@ def change_thread(args):
 	if args.opening:
 		for el in args.opening:
 			try:
-				current_indices[0] = int(args.opening)
+				current_indices[0] = int(el)
 			except ValueError:
-				current_descriptions[0] = args.opening
+				current_descriptions[0] = el
+		if not all(current_indices[0] <= i for i in current_indices[1:]):
+			raise ValueError("The story thread must open before it can develop or close")
+	if args.development:
+		if dev_index < 0:
+			raise ValueError(f"The given development index or description does not match a known development.")
+		for el in args.development:
+			try:
+				current_indices[dev_index] = int(el)
+			except ValueError:
+				current_descriptions[dev_index] = el
+		if current_indices[0] > current_indices[dev_index]:
+			raise ValueError(f"The story thread cannot develop before it opens.")
 	if args.ending:
 		for el in args.ending:
 			try:
-				current_indices[-1] = int(args.ending)
+				current_indices[-1] = int(el)
 			except ValueError:
-				current_descriptions[-1] = args.ending
+				current_descriptions[-1] = el
 		#current_descriptions.insert(0, args.name)
+		if not all(current_indices[-1] >= i for i in current_indices[:-1]):
+			raise ValueError("The story thread must close after it opens or develops")
+
+	# adjust indices for removed elements
+	for i in range(len(current_indices)):
+		current_indices[i] -= i
+
 	params = argparse.Namespace(
 		story = args.story,
 		path = args.path,
@@ -468,8 +508,5 @@ def change_thread(args):
 	)
 
 	# remove old thread, create and store changed thread
-	remove_thread(argparse.Namespace(story=args.story, path=args.path, show_connections=args.show_connections, name=args.name, ending=False), noshow=True)
-	add_thread(params)
-
-
-
+	remove_thread(argparse.Namespace(story=args.story, path=args.path, show_connections=args.show_connections, name=args.name, ending=False, development=""), noshow=True, nocache=True)
+	add_thread(params, nocache=True)
