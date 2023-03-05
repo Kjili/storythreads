@@ -125,6 +125,21 @@ def test_add_whole_thread(monkeypatch, tmp_path):
 		result = json.load(f)
 		assert result == expected
 
+def test_add_whole_thread_with_differening_id(monkeypatch, tmp_path):
+	ADD_ARGS.path = tmp_path
+	monkeypatch.setattr(ADD_ARGS, "names", [get_descriptions(WHOLE_THREAD)[0]] + ["antagonist is in disguise"] + get_descriptions(WHOLE_THREAD)[1:])
+	monkeypatch.setattr(ADD_ARGS, "indices", [int(i) for i in WHOLE_THREAD.keys()])
+	monkeypatch.setattr(ADD_ARGS, "close", thread_closes(WHOLE_THREAD))
+
+	expected = WHOLE_THREAD
+	monkeypatch.setitem(expected, "0", {"antagonist in disguise":
+		{"event": "open", "description": "antagonist is in disguise"}})
+
+	story_threads.add_thread(ADD_ARGS)
+	with open(Path(tmp_path, "runtests.json"), "r") as f:
+		result = json.load(f)
+		assert result == expected
+
 def test_add_same_thread_twice(monkeypatch, tmp_path):
 	ADD_ARGS.path = tmp_path
 	monkeypatch.setattr(ADD_ARGS, "names", get_descriptions(WHOLE_THREAD))

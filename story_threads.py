@@ -276,9 +276,12 @@ def add_thread(args, nocache=False):
 
 	If the name of the story thread does not exist yet: Add the story
 	thread to the json at the given index.
+	The first of the names acts as id and opening descriptions, if one
+	less index than name is given.
 	If only the opening or the opening and a development (or
 	developments) are given, the story thread is left open. If a closing
-	flag is given, the last event closes the thread.
+	flag is given and the thread is open, the last event closes the
+	thread.
 	If the name of the story thread exists and the closing flag is not
 	set: Develop the respective story thread and store it in the json.
 	If the name of the story thread exists and the close flag is set:
@@ -300,7 +303,7 @@ def add_thread(args, nocache=False):
 			- descriptions are missing for opening or developments
 			- the order of opening, developments, closing is wrong
 	"""
-	if not args.names: # TODO switch to a UID instead of the name as identifier?
+	if not args.names:
 		raise ValueError("You need to pass at least one event name to act as identifier for the story thread")
 	if not args.indices:
 		raise ValueError("You need to pass indices to add something")
@@ -312,16 +315,31 @@ def add_thread(args, nocache=False):
 	events = args.names.copy()
 	thread_id = args.names[0]
 	thread_is_new = thread_id not in [next(iter(el.keys())) for el in thread_list]
-	if not thread_is_new:
-		events.pop(0) # remove id
+
+	# remove id if the first name may be the id
+	if thread_is_new:
+		if len(args.names) + 1 == len(args.indices) and args.close:
+			pass
+		elif len(args.names) == len(args.indices) + 1:
+			events.pop(0)
+		elif len(args.names) == len(args.indices) and not args.close:
+			pass
+		elif len(args.names) == len(args.indices) and args.close:
+			# only unclear state, first could be id or ending could have
+			# no description
+			pass
+			#events.pop(0)
+		else:
+			raise ValueError("Missing description. Every event except of the closing of a story thread needs a description")
+	else:
+		events.pop(0)
+
+	#assert len(events) <= len(args.indices)
 
 	if thread_is_new and not all(args.indices[0] <= args.indices[i+1] for i in range(len(args.indices) - 1)):
 		raise ValueError("The story thread must open before it can develop or close")
 	if not thread_events_are_new(thread_list, thread_id, events):
 		raise ValueError("The story thread already contains events with these descriptions")
-	if (thread_is_new and (args.close and len(args.indices) > len(args.names) + 1 or not args.close and len(args.indices) > len(args.names))
-	or not thread_is_new and (args.close and len(args.indices) > len(args.names) or not args.close and len(args.indices) > len(args.names) - 1)):
-		raise ValueError("Missing description. Every event except of the closing of a story thread needs a description")
 	if args.close and thread_is_closed(thread_list, thread_id):
 		raise ValueError("Cannot close a closed thread")
 
@@ -514,6 +532,9 @@ def change_thread(args):
 	# adjust indices for removed elements
 	for i in range(len(current_indices)):
 		current_indices[i] -= i
+
+	# add the id
+	current_descriptions.insert(0, args.name)
 
 	params = argparse.Namespace(
 		story = args.story,
