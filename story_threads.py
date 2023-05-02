@@ -165,7 +165,13 @@ def show_threads(args):
 			# thread
 			if thread == current_thread_name:
 				if current_thread[current_thread_name]["event"] == EVENT.OPENING:
-					line = current_thread[current_thread_name]["description"] + line
+					if not current_thread_name == current_thread[current_thread_name]["description"]:
+						if thread_is_closed(thread_list, current_thread_name):
+							line = current_thread_name + ": " + current_thread[current_thread_name]["description"] + line
+						else:
+							line = "\033[1m" + current_thread_name + "\033[0m: " + current_thread[current_thread_name]["description"] + line
+					else:
+						line = current_thread[current_thread_name]["description"] + line
 					neighbor_is_opening = True
 				else:
 					if current_thread[current_thread_name]["event"] == EVENT.DEVELOPMENT:
