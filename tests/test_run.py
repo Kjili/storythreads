@@ -167,6 +167,23 @@ def test_add_open_thread(monkeypatch, tmp_path):
 		result = json.load(f)
 		assert result == expected
 
+def test_add_first(monkeypatch, tmp_path):
+	expected = OPEN_THREAD
+	monkeypatch.delitem(expected, "2")
+
+	with open(Path(tmp_path, "runtests.json"), "w") as f:
+		pass
+
+	ADD_ARGS.path = tmp_path
+	monkeypatch.setattr(ADD_ARGS, "names", get_descriptions(OPEN_THREAD))
+	monkeypatch.setattr(ADD_ARGS, "indices", [0])
+	monkeypatch.setattr(ADD_ARGS, "close", False)
+
+	story_threads.add_thread(ADD_ARGS)
+	with open(Path(tmp_path, "runtests.json"), "r") as f:
+		result = json.load(f)
+		assert result == expected
+
 def test_add_whole_thread_first(monkeypatch, tmp_path):
 	expected = WHOLE_THREAD_FIRST
 
